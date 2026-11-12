@@ -8,6 +8,7 @@ image_size = 28 # height and width of image
 n = [image_size ** 2, 128, 10] # width of the layers, starting from the input layer
 num_train_images = 60000
 num_test_images = 10000
+alpha = 0.005 # learning rate
 
 def load_mnist(images_filename, labels_filename):
     """Return image columns, digit labels, and one-hot labels (10, image_count)."""
@@ -21,7 +22,7 @@ def load_mnist(images_filename, labels_filename):
     # Each column has a 1 in the row matching its digit, and 0 elsewhere.
     one_hot_labels = np.zeros((10, labels.size), dtype=np.uint8)
     one_hot_labels[labels, np.arange(labels.size)] = 1
-    return images, labels, one_hot_labels
+    return images/255, labels, one_hot_labels
 
 
 x_train, y_train, y_train_one_hot = load_mnist("train-images.idx3-ubyte", "train-labels.idx1-ubyte")
@@ -47,24 +48,72 @@ def activation_output(z):
     exp_z = np.exp(shifted)
     return exp_z / np.sum(exp_z, axis=0, keepdims=True)
 
-def cost(empirical, true):
+def accuracy(empirical, true):
     predictions = np.argmax(empirical, axis = 0)
     num_correct = np.sum(predictions == true)
     percent_correct = num_correct / len(predictions)
     return percent_correct
     
+def cross_entropy_loss(empirical, true):
+    product = true * np.log(empirical)
+    return -1 * np.sum(product) 
 
-def run_epoch(A_previous, costs, weights, biases):
+def backpropagate(A_array, Z_array, weights, Y):
+    """Calculate gradients for summed cross-entropy loss."""
+    dweights = [None] * len(weights)
+    dbiases = [None] * len(weights)
+
+    # Gradient with respect to the final layer's pre-activation.
+    dZ = A_array[-1] - Y
+
+    # Work backward from the output layer.
+    for k in reversed(range(len(weights))):
+        dweights[k] = dZ @ A_array[k].T
+        dbiases[k] = np.sum(dZ, axis=1, keepdims=True)
+
+        if k > 0:
+            # Propagate through this layer's matrix multiplication.
+            dA_previous = weights[k].T @ dZ
+
+            # Propagate through the previous hidden layer's ReLU.
+            dZ = dA_previous * (Z_array[k - 1] > 0)
+
+    return dweights, dbiases
+
+def run_epoch(A_previous, costs, accuracies, weights, biases):
+    A_array = [A_previous]
+    Z_array = []
     for k in range(L):
         Z = weights[k]@A_previous + biases[k]
         if k == L - 1:
-            A_previous = activation_hidden(Z)
-        else:
             A_previous = activation_output(Z)
-    current_cost = cost(A_previous, y_train)
-    costs.append(current_cost)
+        else:
+            A_previous = activation_hidden(Z)
+        A_array.append(A_previous)
+        Z_array.append(Z)
+    current_accuracy = accuracy(A_previous, y_train)
+    accuracies.append(current_accuracy)
+    current_loss = cross_entropy_loss(A_previous, y_train_one_hot)
+    costs.append(current_loss)
+
+    dweights, dbiases = backpropagate(
+        A_array, Z_array, weights, y_train_one_hot
+    )
+
+    for k in range(len(weights)):
+        weights[k] -= alpha * dweights[k]
+        biases[k] -= alpha * dbiases[k]
+
+    return weights, biases
+
+costs = []
+accuracies = []
+for m in range(10):
+    weights, biases = run_epoch(x_train, costs, accuracies, weights, biases)
+    print(f'Epoch {m}, accuracy = {accuracies[-1]}, loss = {costs[-1]}')
 
 
     
+
 
 
