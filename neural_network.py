@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+import pickle
 
 #hyperparameters
 DATA_DIR = Path(__file__).resolve().parent / "MNIST"
@@ -55,8 +56,11 @@ def accuracy(empirical, true):
     return percent_correct
     
 def cross_entropy_loss(empirical, true):
-    product = true * np.log(empirical)
-    return -1 * np.sum(product) 
+    shifted = empirical - np.max(empirical, axis=0, keepdims=True)
+    log_probs = shifted - np.log(
+        np.sum(np.exp(shifted), axis=0, keepdims=True)
+    )
+    return -np.sum(true * log_probs) / true.shape[1] 
 
 def backpropagate(A_array, Z_array, weights, Y):
     """Calculate gradients for summed cross-entropy loss."""
@@ -64,7 +68,7 @@ def backpropagate(A_array, Z_array, weights, Y):
     dbiases = [None] * len(weights)
 
     # Gradient with respect to the final layer's pre-activation.
-    dZ = A_array[-1] - Y
+    dZ = (A_array[-1] - Y) / Y.shape[1]
 
     # Work backward from the output layer.
     for k in reversed(range(len(weights))):
@@ -93,7 +97,7 @@ def run_epoch(A_previous, costs, accuracies, weights, biases):
         Z_array.append(Z)
     current_accuracy = accuracy(A_previous, y_train)
     accuracies.append(current_accuracy)
-    current_loss = cross_entropy_loss(A_previous, y_train_one_hot)
+    current_loss = cross_entropy_loss(Z_array[-1], y_train_one_hot)
     costs.append(current_loss)
 
     dweights, dbiases = backpropagate(
@@ -108,12 +112,24 @@ def run_epoch(A_previous, costs, accuracies, weights, biases):
 
 costs = []
 accuracies = []
-for m in range(10):
+for m in range(1000):
     weights, biases = run_epoch(x_train, costs, accuracies, weights, biases)
-    print(f'Epoch {m}, accuracy = {accuracies[-1]}, loss = {costs[-1]}')
+    if m % 10 == 0:
+        print(f'Epoch {m}: accuracy = {accuracies[-1]}, loss = {costs[-1]}')
+    if len(costs) > 1 and abs(costs[-1] - costs[-2]) < 0.01:
+        break
 
-
-    
-
-
-
+# Save training history and the final model parameters.
+results_path = Path(__file__).resolve().parent / "training_results.pkl"
+with results_path.open("wb") as file:
+    pickle.dump(
+        {
+            "costs": costs,
+            "accuracies": accuracies,
+            "weights": weights,
+            "biases": biases,
+        },
+        file,
+        protocol=pickle.HIGHEST_PROTOCOL,
+    )
+print(f"Saved training results to {results_path}")
