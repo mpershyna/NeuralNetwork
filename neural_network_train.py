@@ -4,9 +4,9 @@ import pickle
 
 #hyperparameters
 DATA_DIR = Path(__file__).resolve().parent / "MNIST"
-L = 2 # number of layers, not counting the input layer
+L = 3 # number of layers, not counting the input layer
 image_size = 28 # height and width of image
-n = [image_size ** 2, 128, 10] # width of the layers, starting from the input layer
+n = [image_size ** 2, 128, 64, 10] # width of the layers, starting from the input layer
 num_train_images = 60000
 num_test_images = 10000
 alpha = 0.005 # learning rate
@@ -120,7 +120,7 @@ for m in range(1000):
         break
 
 # Save training history and the final model parameters.
-results_path = Path(__file__).resolve().parent / "training_results.pkl"
+results_path = Path(__file__).resolve().parent / "training_results_3layer.pkl"
 with results_path.open("wb") as file:
     pickle.dump(
         {
