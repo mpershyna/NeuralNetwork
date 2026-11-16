@@ -32,3 +32,10 @@ The dataset and virtual environment are excluded from Git.
 - `mnist_loader.py`: the original MNIST loading and image display example.
 
 Run `python neural_network.py` to load the data and initialize the network. Training is still being implemented.
+
+## Tuning process
+- Initial simple MLP (Numpy-based) achieved 66% test accuracy. This used 1 hidden layer (128 width) and 1 output layer, ReLU activation for the hidden layer, softmax activation for the output layer, cross-entropy loss, and gradient descent with analytically computed gradients.
+- An additional hidden layer of width 64 improved the test accuracy to approximately 80% (Numpy-based model)
+- The same model implemented in Pytorch (with the addition of re-scaling the data to have mean 0 and variance 1) led to an improved test accuracy of 88% and a much faster training
+- Increasing the width of the first hidden layer to 500 did not significantly improve the train or test accuracy but did lead to longer training, so I kept the original 128 width for the first hidden layer.
+- Introducing batches of size 100 into the training improved training accuracy to over 99% but test accuracy lagged at approximately 96.5%, suggesting some overfitting. Batch sizes of 300 and 600 led to slightly lower train and test accuracy but still had training accuracy higher by 1-2%. 

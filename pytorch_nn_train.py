@@ -15,6 +15,7 @@ n = [image_size ** 2, 128, 64, 10]
 alpha = 0.005
 batch_size = 300
 epoch_count = 100
+dropout_rate = 0.1
 
 
 def load_mnist(images_filename, labels_filename):
@@ -28,11 +29,12 @@ def load_mnist(images_filename, labels_filename):
 
 
 class MLP(nn.Module):
-    def __init__(self, L, n):
+    def __init__(self, L, n, dropout_rate=0.0):
         super().__init__()
         if L < 1 or len(n) != L + 1:
             raise ValueError("Use at least one layer and L + 1 layer widths.")
 
+        self.dropout = nn.Dropout(p=dropout_rate)
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
         for i in range(L):
@@ -41,13 +43,21 @@ class MLP(nn.Module):
             self.biases.append(nn.Parameter(torch.zeros(1, n[i + 1])))
 
     def forward(self, X):
-        """Return logits; each input row is one image."""
+        """Return logits, using inverted dropout on hidden activations during training."""
         self.A_array = [X]
         self.Z_array = []
+        self.dropout_masks = []
         for i in range(len(self.weights)):
             Z = X @ self.weights[i] + self.biases[i]
             self.Z_array.append(Z)
-            X = torch.relu(Z) if i < len(self.weights) - 1 else Z
+            if i < len(self.weights) - 1:
+                X = torch.relu(Z)
+                # Dropout on ones gives the scaled mask needed by manual backprop.
+                mask = self.dropout(torch.ones_like(X))
+                self.dropout_masks.append(mask)
+                X = X * mask
+            else:
+                X = Z
             self.A_array.append(X)
         return X
 
@@ -75,7 +85,8 @@ class MLP(nn.Module):
             dweights[k] = self.A_array[k].T @ dZ
             dbiases[k] = torch.sum(dZ, dim=0, keepdim=True)
             if k > 0:
-                dZ = (dZ @ self.weights[k].T) * (self.Z_array[k - 1] > 0)
+                dA_previous = (dZ @ self.weights[k].T) * self.dropout_masks[k - 1]
+                dZ = dA_previous * (self.Z_array[k - 1] > 0)
 
         for k in range(len(self.weights)):
             self.weights[k] -= alpha * dweights[k]
@@ -122,12 +133,12 @@ if __name__ == "__main__":
     y_test_one_hot = torch.tensor(y_test_one_hot.T, dtype=torch.float32)
 
     torch.manual_seed(42)
-    model = MLP(L, n)
+    model = MLP(L, n, dropout_rate=dropout_rate)
     losses, accuracies = model.fit(
         X_train, y_train, epochs=epoch_count, alpha=alpha, batch_size=batch_size
     )
 
-    torch.save(model.state_dict(), Path(__file__).resolve().parent / "pytorch_model300.pth")
+    torch.save(model.state_dict(), Path(__file__).resolve().parent / f"pytorch_model_dropout{dropout_rate}.pth")
     model.eval()
     weights = model.weights
     biases = model.biases
@@ -137,7 +148,7 @@ if __name__ == "__main__":
         test_accuracy = model.accuracy(output, y_test).item()
     print(f"Test loss = {test_loss}, test accuracy = {test_accuracy}")
 
-    results_path = Path(__file__).resolve().parent / "training_results_pytorch300.pkl"
+    results_path = Path(__file__).resolve().parent / f"training_results_pytorch_dropout{dropout_rate}.pkl"
     with results_path.open("wb") as file:
         pickle.dump(
             {
@@ -156,5 +167,5 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
 
-#model = MLP(L, n)
+#model = MLP(L, n, dropout_rate=dropout_rate)
 #losses, accuracies = model.fit(X_train, y_train, epochs=100, alpha=alpha, batch_size=batch_size)
