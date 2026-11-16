@@ -13,8 +13,8 @@ L = 3  # Number of layers, not counting the input layer.
 image_size = 28
 n = [image_size ** 2, 128, 64, 10]
 alpha = 0.005
-batch_size = 100
-epoch_count = 100
+batch_size = 50
+epoch_count = 70
 dropout_rate = 0.1
 
 
@@ -38,9 +38,10 @@ class MLP(nn.Module):
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
         for i in range(L):
-            scale = (2 / n[i]) ** 0.5 if i < L - 1 else (1 / n[i]) ** 0.5
+            # He normal: use the layer input width for both weights and biases.
+            scale = (2 / n[i]) ** 0.5
             self.weights.append(nn.Parameter(torch.randn(n[i], n[i + 1]) * scale))
-            self.biases.append(nn.Parameter(torch.zeros(1, n[i + 1])))
+            self.biases.append(nn.Parameter(torch.randn(1, n[i + 1]) * scale))
 
     def forward(self, X):
         """Return logits, using inverted dropout on hidden activations during training."""
@@ -76,7 +77,7 @@ class MLP(nn.Module):
 
     @torch.no_grad()
     def backward(self, Y, alpha=0.005):
-        """Calculate all gradients, then apply an Adam update; Y is one-hot."""
+        """Calculate all gradients, then update parameters; Y is one-hot."""
         dweights = [None] * len(self.weights)
         dbiases = [None] * len(self.weights)
         dZ = (torch.softmax(self.A_array[-1], dim=1) - Y) / Y.shape[0]
@@ -88,15 +89,9 @@ class MLP(nn.Module):
                 dA_previous = (dZ @ self.weights[k].T) * self.dropout_masks[k - 1]
                 dZ = dA_previous * (self.Z_array[k - 1] > 0)
 
-        # Create Adam once so its running averages persist across batches.
-        if not hasattr(self, "optimizer"):
-            self.optimizer = torch.optim.Adam(self.parameters(), lr=alpha)
-        self.optimizer.param_groups[0]["lr"] = alpha
-        self.optimizer.zero_grad(set_to_none=True)
         for k in range(len(self.weights)):
-            self.weights[k].grad = dweights[k]
-            self.biases[k].grad = dbiases[k]
-        self.optimizer.step()
+            self.weights[k] -= alpha * dweights[k]
+            self.biases[k] -= alpha * dbiases[k]
         return dweights, dbiases
 
     @torch.no_grad()

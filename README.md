@@ -39,3 +39,4 @@ Run `python neural_network.py` to load the data and initialize the network. Trai
 - The same model implemented in Pytorch (with the addition of re-scaling the data to have mean 0 and variance 1) led to an improved test accuracy of 88% and a much faster training
 - Increasing the width of the first hidden layer to 500 did not significantly improve the train or test accuracy but did lead to longer training, so I kept the original 128 width for the first hidden layer.
 - Introducing batches of size 100 into the training improved training accuracy to over 99% but test accuracy lagged at approximately 96.5%, suggesting some overfitting. Batch sizes of 300 and 600 led to slightly lower train and test accuracy but still had training accuracy higher by 1-2%. 
+- Introducing dropout plus a batch size of 50 led to a test accuracy of 97.4%
