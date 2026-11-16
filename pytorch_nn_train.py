@@ -2,7 +2,10 @@ from pathlib import Path
 import torch
 import numpy as np
 from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import pickle
 
 # Hyperparameters
 DATA_DIR = Path(__file__).resolve().parent / "MNIST"
@@ -10,6 +13,8 @@ L = 3  # Number of layers, not counting the input layer.
 image_size = 28
 n = [image_size ** 2, 128, 64, 10]
 alpha = 0.005
+batch_size = 300
+epoch_count = 100
 
 
 def load_mnist(images_filename, labels_filename):
@@ -78,25 +83,30 @@ class MLP(nn.Module):
         return dweights, dbiases
 
     @torch.no_grad()
-    def fit(self, X, y, epochs=1000, alpha=0.005):
-        """Train on the supplied images and digit labels using manual gradients."""
+    def fit(self, X, y, epochs=1000, alpha=0.005, batch_size=128):
+        """Train on shuffled mini-batches and return sample-weighted epoch metrics."""
         self.train()
         y = y.to(device=X.device, dtype=torch.long)
-        Y = torch.nn.functional.one_hot(
-            y, num_classes=self.weights[-1].shape[1]
-        ).to(dtype=X.dtype)
+        loader = DataLoader(TensorDataset(X, y), batch_size=batch_size, shuffle=True)
         losses = []
         accuracies = []
         for epoch in range(epochs):
-            output = self(X)
-            loss = self.cross_entropy_loss(output, Y)
-            if not torch.isfinite(loss):
-                raise FloatingPointError("Non-finite loss; check inputs and learning rate.")
-            acc = self.accuracy(output, y).item()
-            losses.append(loss.item())
-            accuracies.append(acc)
-            self.backward(Y, alpha)
-            print(f"Epoch {epoch}: loss = {losses[-1]}, accuracy = {acc}")
+            total_loss = 0.0
+            total_correct = 0
+            for X_batch, y_batch in loader:
+                Y_batch = torch.nn.functional.one_hot(
+                    y_batch, num_classes=self.weights[-1].shape[1]
+                ).to(dtype=X_batch.dtype)
+                output = self(X_batch)
+                loss = self.cross_entropy_loss(output, Y_batch)
+                if not torch.isfinite(loss):
+                    raise FloatingPointError("Non-finite loss; check inputs and learning rate.")
+                total_loss += loss.item() * len(X_batch)
+                total_correct += (output.argmax(dim=1) == y_batch).sum().item()
+                self.backward(Y_batch, alpha)
+            losses.append(total_loss / len(X))
+            accuracies.append(total_correct / len(X))
+            print(f"Epoch {epoch}: loss = {losses[-1]}, accuracy = {accuracies[-1]}")
         return losses, accuracies
 
 
@@ -113,14 +123,38 @@ if __name__ == "__main__":
 
     torch.manual_seed(42)
     model = MLP(L, n)
-    losses, accuracies = model.fit(X_train, y_train, epochs=10, alpha=alpha)
+    losses, accuracies = model.fit(
+        X_train, y_train, epochs=epoch_count, alpha=alpha, batch_size=batch_size
+    )
 
+    torch.save(model.state_dict(), Path(__file__).resolve().parent / "pytorch_model300.pth")
     model.eval()
+    weights = model.weights
+    biases = model.biases
     with torch.no_grad():
         output = model(X_test)
         test_loss = model.cross_entropy_loss(output, y_test_one_hot).item()
         test_accuracy = model.accuracy(output, y_test).item()
     print(f"Test loss = {test_loss}, test accuracy = {test_accuracy}")
 
-model = MLP(L, n)
-losses, accuracies = model.fit(X_train, y_train, epochs=10, alpha=alpha)
+    results_path = Path(__file__).resolve().parent / "training_results_pytorch300.pkl"
+    with results_path.open("wb") as file:
+        pickle.dump(
+            {
+                "costs": losses,
+                "accuracies": accuracies,
+                "weights": weights,
+                "biases": biases,
+            },
+            file,
+            protocol=pickle.HIGHEST_PROTOCOL,
+        )
+    print(f"Saved training results to {results_path}")
+
+    plt.plot(losses, label='loss')
+    plt.plot(accuracies, label="accuracy")
+    plt.legend()
+    plt.show()
+
+#model = MLP(L, n)
+#losses, accuracies = model.fit(X_train, y_train, epochs=100, alpha=alpha, batch_size=batch_size)
