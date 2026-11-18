@@ -12,9 +12,9 @@ DATA_DIR = Path(__file__).resolve().parent / "MNIST"
 L = 3  # Number of layers, not counting the input layer.
 image_size = 28
 n = [image_size ** 2, 128, 64, 10]
-alpha = 0.005
-batch_size = 50
-epoch_count = 10
+alpha = 0.1
+batch_size = 100
+epoch_count = 100
 dropout_rate = 0.1
 
 
@@ -138,7 +138,7 @@ def postprocessing(model, write=False):
     print(f"Test loss = {test_loss}, test accuracy = {test_accuracy}")
 
     if write:
-        results_path = Path(__file__).resolve().parent / f"training_results_pytorch_dropout{dropout_rate}.pkl"
+        results_path = Path(__file__).resolve().parent / f"training_results_pytorch_optimal.pkl"
         with results_path.open("wb") as file:
             pickle.dump(
                 {
@@ -171,20 +171,27 @@ if __name__ == "__main__":
     y_test = torch.tensor(y_test, dtype=torch.long)
     y_test_one_hot = torch.tensor(y_test_one_hot.T, dtype=torch.float32)
 
+    # torch.manual_seed(42)
+    # validations = dict()
+    # for alpha in [0.005, 0.01, 0.05, 0.1]:
+    #     for batch_size in [50, 100, 1000]:
+    #         epoch_count = batch_size # epoch_count = 50000*batch_size/50000
+    #         model = MLP(L, n, dropout_rate=dropout_rate)
+    #         losses, accuracies = model.fit(
+    #             X_train, y_train, epochs=epoch_count, alpha=alpha, batch_size=batch_size
+    #             )
+    #         validation_loss, validation_accuracy = postprocessing(model, write=False)
+    #         validations[validation_accuracy] = (alpha, batch_size)
+    # print(f'Highest validation accuracy: {max(validations.keys())}')
+    # print(f'Best parameters: {validations[max(validations.keys())]}')
+    # print(validations)
+
     torch.manual_seed(42)
-    validations = dict()
-    for alpha in [0.005, 0.01, 0.05, 0.1]:
-        for batch_size in [50, 100, 1000]:
-            epoch_count = batch_size # epoch_count = 50000*batch_size/50000
-            model = MLP(L, n, dropout_rate=dropout_rate)
-            losses, accuracies = model.fit(
-                X_train, y_train, epochs=epoch_count, alpha=alpha, batch_size=batch_size
-                )
-            validation_loss, validation_accuracy = postprocessing(model, write=False)
-            validations[validation_accuracy] = (alpha, batch_size)
-    print(f'Highest validation accuracy: {max(validations.keys())}')
-    print(f'Best parameters: {validations[max(validations.keys())]}')
-    print(validations)
+    model = MLP(L, n, dropout_rate=dropout_rate)
+    losses, accuracies = model.fit(
+        X_train, y_train, epochs=epoch_count, alpha=alpha, batch_size=batch_size
+        )
+    validation_loss, validation_accuracy = postprocessing(model, write=True)
 
     plt.plot(losses, label='loss')
     plt.plot(accuracies, label="accuracy")

@@ -40,3 +40,4 @@ Run `python neural_network.py` to load the data and initialize the network. Trai
 - Increasing the width of the first hidden layer to 500 did not significantly improve the train or test accuracy but did lead to longer training, so I kept the original 128 width for the first hidden layer.
 - Introducing batches of size 100 into the training improved training accuracy to over 99% but test accuracy lagged at approximately 96.5%, suggesting some overfitting. Batch sizes of 300 and 600 led to slightly lower train and test accuracy but still had training accuracy higher by 1-2%. 
 - Introducing dropout plus a batch size of 50 led to a test accuracy of 97.4%
+- Optimal parameters were found to be a batch size of 100 and step size of 0.1 with the best performance on the validation set. Test accuracy with these parameters is 97.6% (training accuracy 99.6%, validation accuracy 97.5%).
